@@ -1002,7 +1002,7 @@ def unfinalize_bet_log(log_id):
 
 def update_bet_log_field(log_id, field, value):
     """Update a single field on a bet_log entry, then recalculate parent bet totals."""
-    allowed_fields = ['stake_added', 'filled_added', 'shares_bid', 'shares_filled', 'odds', 'bid_price', 'notes']
+    allowed_fields = ['stake_added', 'filled_added', 'shares_bid', 'shares_filled', 'odds', 'bid_price', 'bookie', 'notes']
     if field not in allowed_fields:
         raise ValueError(f"Field '{field}' not allowed")
 
