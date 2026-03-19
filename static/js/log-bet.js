@@ -1,6 +1,8 @@
 // log-bet.js - log bet modal, split calculator, kalshi fee adjustment, close detection
 
 let _logBetSubmitting = false;
+let _editingLogId = null;
+let _editingBetId = null;
 
 // ============================================================
 // Kalshi Fee Functions (parabolic fee model)
@@ -80,8 +82,82 @@ function showLogBetModal(prefill) {
   setupTeamAutocomplete();
 }
 
+function showLogBetModalEdit(logData) {
+  // Open modal in edit mode, pre-filled with existing log data
+  _editingLogId = logData.id;
+  _editingBetId = logData.betId;
+
+  const modal = document.getElementById('log-bet-modal');
+  modal.style.display = 'block';
+  _logBetSubmitting = false;
+
+  // Update modal title and button
+  const titleEl = modal.querySelector('h2');
+  if (titleEl) titleEl.textContent = 'edit log #' + logData.id;
+  const submitBtn = modal.querySelector('.modal-actions button:last-child');
+  if (submitBtn) submitBtn.textContent = 'save';
+
+  // Pre-fill fields
+  document.getElementById('log-bet-book').value = logData.bookie || 'dk';
+
+  // Convert decimal odds to american
+  const odds = logData.odds || 0;
+  const americanOdds = odds >= 2.0
+    ? '+' + Math.round((odds - 1) * 100)
+    : odds > 1 ? Math.round(-100 / (odds - 1)) : '';
+  document.getElementById('log-bet-book-odds').value = americanOdds;
+
+  // Stake
+  document.getElementById('log-bet-stake').value = logData.stake || '';
+
+  // PM fields
+  document.getElementById('log-bet-bid-price').value = logData.bidPrice || '';
+  document.getElementById('log-bet-filled').value = logData.filled || '';
+
+  // Fair odds (from log data if available)
+  const fairOdds = logData.fairOdds || 0;
+  if (fairOdds > 1) {
+    document.getElementById('log-bet-fair-american').value = decimalToAmerican(fairOdds);
+    document.getElementById('log-bet-fair-pct').value = (1 / fairOdds * 100).toFixed(2) + '%';
+  } else {
+    document.getElementById('log-bet-fair-american').value = '';
+    document.getElementById('log-bet-fair-pct').value = '';
+  }
+
+  // Notes
+  document.getElementById('log-bet-notes').value = logData.notes || '';
+
+  // Split calc fields for PM
+  if (logData.isPM) {
+    if (logData.sharesBid > 0) {
+      document.getElementById('log-bet-taker-shares').value = logData.sharesFilled || '';
+      document.getElementById('log-bet-taker-price').value = logData.bidPrice || '';
+    }
+  }
+
+  // Other fields we don't pre-fill but need to clear
+  document.getElementById('log-bet-kelly-display').textContent = '';
+  document.getElementById('log-bet-edge-display').textContent = '';
+  document.getElementById('log-bet-close-info').style.display = 'none';
+  clearSplitFields();
+
+  updatePmFieldsVisibility();
+  recalculateKellyDisplay();
+}
+
 function closeLogBetModal() {
   document.getElementById('log-bet-modal').style.display = 'none';
+
+  // Reset edit mode
+  if (_editingLogId) {
+    _editingLogId = null;
+    _editingBetId = null;
+    const modal = document.getElementById('log-bet-modal');
+    const titleEl = modal.querySelector('h2');
+    if (titleEl) titleEl.textContent = 'log bet';
+    const submitBtn = modal.querySelector('.modal-actions button:last-child');
+    if (submitBtn) submitBtn.textContent = 'log bet';
+  }
 }
 
 // ============================================================
@@ -416,20 +492,55 @@ async function submitLogBet() {
       }
     }
 
-    const resp = await fetch('/log_bet', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    // Edit mode: PATCH individual fields on the existing log
+    if (_editingLogId) {
+      const updates = [
+        { field: 'odds', value: bookDecimal },
+        { field: 'stake_added', value: stake },
+        { field: 'bookie', value: book }
+      ];
+      if (isPmBook(book)) {
+        const bidPrice = parseFloat(document.getElementById('log-bet-bid-price').value);
+        if (bidPrice > 0) updates.push({ field: 'bid_price', value: bidPrice });
+        const filled = parseFloat(document.getElementById('log-bet-filled').value);
+        if (filled >= 0) updates.push({ field: 'filled_added', value: filled });
+      }
+      if (notes) updates.push({ field: 'notes', value: notes });
 
-    const data = await resp.json();
+      let success = true;
+      for (const upd of updates) {
+        const r = await fetch('/update_bet_log/' + _editingLogId, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ field: upd.field, value: upd.value })
+        });
+        const d = await r.json();
+        if (!d.success) { alert('error: ' + d.error); success = false; break; }
+      }
 
-    if (data.success) {
-      closeLogBetModal();
-      if (typeof loadActiveBets === 'function') loadActiveBets();
-      if (typeof loadBankroll === 'function') loadBankroll();
+      if (success) {
+        const editBetId = _editingBetId;
+        closeLogBetModal();
+        if (typeof loadedLogs !== 'undefined') loadedLogs.delete(editBetId);
+        if (typeof loadActiveBets === 'function') loadActiveBets();
+      }
     } else {
-      alert('error: ' + data.error);
+      // Normal mode: POST new bet
+      const resp = await fetch('/log_bet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await resp.json();
+
+      if (data.success) {
+        closeLogBetModal();
+        if (typeof loadActiveBets === 'function') loadActiveBets();
+        if (typeof loadBankroll === 'function') loadBankroll();
+      } else {
+        alert('error: ' + data.error);
+      }
     }
   } catch (e) {
     alert('error: ' + e.message);

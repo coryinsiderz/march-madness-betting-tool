@@ -373,9 +373,10 @@ function renderLogRow(log, betId, isPM) {
       id: log.id, betId: betId, isPM: isPM,
       odds: log.odds || 0, stake: log.stake_added || 0, filled: log.filled_added || 0,
       sharesBid: log.shares_bid || 0, sharesFilled: log.shares_filled || 0,
-      bidPrice: log.bid_price || 0, bookie: log.bookie || ''
+      bidPrice: log.bid_price || 0, bookie: log.bookie || '',
+      fairOdds: log.fair_odds || 0, notes: log.notes || ''
     }).replace(/"/g, '&quot;');
-    html += '<button onclick="event.stopPropagation(); editBetLog(' + logJson + ')" style="padding: 1px 4px; font-size: 9px; background: #4a90d9; color: #fff; border: none; border-radius: 2px; cursor: pointer; margin-right: 2px;">edit</button>';
+    html += '<button onclick="event.stopPropagation(); showLogBetModalEdit(' + logJson + ')" style="padding: 1px 4px; font-size: 9px; background: #4a90d9; color: #fff; border: none; border-radius: 2px; cursor: pointer; margin-right: 2px;">edit</button>';
   }
 
   // Delete button
@@ -479,83 +480,6 @@ async function fillPMBetLog(logId, betId, sharesBid, sharesFilled, bidPrice) {
   }
 }
 
-async function editBetLog(logData) {
-  // Build a prompt string with all editable fields
-  const oddsAmerican = logData.odds >= 2.0
-    ? '+' + ((logData.odds - 1) * 100).toFixed(0)
-    : logData.odds > 1 ? (-100 / (logData.odds - 1)).toFixed(0) : '0';
-
-  let promptLines = [
-    'edit log #' + logData.id,
-    '',
-    'odds (american): ' + oddsAmerican,
-    'stake ($): ' + logData.stake.toFixed(2),
-    'book: ' + logData.bookie
-  ];
-  if (logData.isPM) {
-    promptLines.push('shares bid: ' + Math.round(logData.sharesBid));
-    promptLines.push('shares filled: ' + Math.round(logData.sharesFilled));
-    promptLines.push('bid price (%): ' + logData.bidPrice.toFixed(2));
-    promptLines.push('filled ($): ' + logData.filled.toFixed(2));
-  }
-  promptLines.push('', 'enter field=value to change (e.g. odds=+450)');
-  promptLines.push('multiple: odds=+450, stake=25.00');
-
-  const input = prompt(promptLines.join('\n'));
-  if (!input || !input.trim()) return;
-
-  // Parse field=value pairs
-  const pairs = input.split(',').map(s => s.trim()).filter(Boolean);
-  const updates = [];
-
-  for (const pair of pairs) {
-    const eqIdx = pair.indexOf('=');
-    if (eqIdx < 0) continue;
-    const key = pair.substring(0, eqIdx).trim().toLowerCase();
-    const val = pair.substring(eqIdx + 1).trim();
-
-    if (key === 'odds') {
-      // Convert american to decimal
-      const am = parseFloat(val.replace('+', ''));
-      if (isNaN(am)) { alert('invalid odds: ' + val); return; }
-      const dec = am >= 0 ? (am / 100) + 1 : (100 / Math.abs(am)) + 1;
-      updates.push({ field: 'odds', value: dec });
-    } else if (key === 'stake') {
-      updates.push({ field: 'stake_added', value: parseFloat(val) });
-    } else if (key === 'filled') {
-      updates.push({ field: 'filled_added', value: parseFloat(val) });
-    } else if (key === 'shares bid' || key === 'sharesbid' || key === 'shares_bid') {
-      updates.push({ field: 'shares_bid', value: parseFloat(val) });
-    } else if (key === 'shares filled' || key === 'sharesfilled' || key === 'shares_filled') {
-      updates.push({ field: 'shares_filled', value: parseFloat(val) });
-    } else if (key === 'bid price' || key === 'bidprice' || key === 'bid_price') {
-      updates.push({ field: 'bid_price', value: parseFloat(val) });
-    } else if (key === 'book' || key === 'bookie') {
-      updates.push({ field: 'bookie', value: val });
-    } else {
-      alert('unknown field: ' + key);
-      return;
-    }
-  }
-
-  if (updates.length === 0) return;
-
-  try {
-    for (const upd of updates) {
-      const resp = await fetch('/update_bet_log/' + logData.id, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ field: upd.field, value: upd.value })
-      });
-      const data = await resp.json();
-      if (!data.success) throw new Error(data.error);
-    }
-    loadedLogs.delete(logData.betId);
-    await loadActiveBets();
-  } catch (e) {
-    alert('error updating: ' + e.message);
-  }
-}
 
 async function updateBetLogField(logId, betId, field, value) {
   try {
