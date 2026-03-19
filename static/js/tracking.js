@@ -1,8 +1,9 @@
-// tracking.js - bet tracking, event management, bet rendering
+// tracking.js - bet tracking, event management, bet rendering, expand/collapse, fill management
 
 let loadedBets = [];
 let loadedLogs = new Map();
 let expandedBetIds = new Set();
+let expandedBooks = new Set();
 
 // Tab switching
 function showTab(tabName) {
@@ -86,10 +87,24 @@ function renderTracking(bets, summary, plAdjustments) {
   container.innerHTML = html;
 
   // Re-expand previously expanded bets
-  expandedBetIds.forEach(betId => {
-    const logsRow = document.getElementById('bet-logs-' + betId);
-    if (logsRow) logsRow.style.display = 'table-row';
-  });
+  if (expandedBetIds.size > 0) {
+    const idsToExpand = [...expandedBetIds];
+    idsToExpand.forEach(id => loadedLogs.delete(id));
+    setTimeout(async () => {
+      for (const id of idsToExpand) {
+        const logsRow = document.getElementById('bet-logs-' + id);
+        if (logsRow && logsRow.style.display === 'none') {
+          expandedBetIds.delete(id);
+          await toggleBetLogs(id);
+        }
+      }
+      // Re-expand books
+      for (const bookId of expandedBooks) {
+        const el = document.getElementById(bookId);
+        if (el) el.style.display = 'block';
+      }
+    }, 50);
+  }
 }
 
 function renderTournamentSection(tournament, bets) {
@@ -165,7 +180,6 @@ function renderBetRow(bet) {
   const booksDisplay = bet.books_list || getBookAbbr(bet.bookie);
   const sideDisplay = (bet.side && bet.side !== 'None') ? (' ' + bet.side) : '';
 
-  // Safe JSON for data attribute
   const safeJson = JSON.stringify(bet).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
 
   let html = '<tr class="bet-row" id="bet-row-' + betId + '" data-bet="' + safeJson + '" onclick="toggleBetLogs(' + betId + ')" oncontextmenu="handleBetRowContextMenu(event, ' + betId + ', this)">';
@@ -179,12 +193,15 @@ function renderBetRow(bet) {
   html += '</tr>';
 
   // Hidden logs row
-  html += '<tr id="bet-logs-' + betId + '" style="display:none"><td colspan="7"><div id="bet-logs-content-' + betId + '" style="padding: 4px 8px; background: #1a1a1a; font-size: 11px;">loading...</div></td></tr>';
+  html += '<tr id="bet-logs-' + betId + '" style="display:none"><td colspan="7"><div id="bet-logs-content-' + betId + '" style="padding: 8px; background: #1a1a1a;">loading...</div></td></tr>';
 
   return html;
 }
 
-// Toggle bet logs expand/collapse
+// ============================================================
+// Toggle Bet Logs (expand/collapse)
+// ============================================================
+
 async function toggleBetLogs(betId) {
   const logsRow = document.getElementById('bet-logs-' + betId);
   if (!logsRow) return;
@@ -198,68 +215,269 @@ async function toggleBetLogs(betId) {
   logsRow.style.display = 'table-row';
   expandedBetIds.add(betId);
 
-  // Load logs if not cached
-  if (!loadedLogs.has(betId)) {
-    try {
-      const resp = await fetch('/get_bet_logs/' + betId);
-      const data = await resp.json();
-      if (data.success) {
-        loadedLogs.set(betId, data);
-        renderBetLogs(betId, data);
-      }
-    } catch (e) {
-      document.getElementById('bet-logs-content-' + betId).textContent = 'error loading logs';
+  // Always reload to get fresh data
+  loadedLogs.delete(betId);
+
+  try {
+    const resp = await fetch('/get_bet_logs/' + betId);
+    const data = await resp.json();
+    if (data.success) {
+      loadedLogs.set(betId, data);
+      renderBetLogs(betId, data);
+    } else {
+      document.getElementById('bet-logs-content-' + betId).innerHTML =
+        '<span style="color: #ff4b4b;">error: ' + data.error + '</span>';
     }
-  } else {
-    renderBetLogs(betId, loadedLogs.get(betId));
+  } catch (e) {
+    document.getElementById('bet-logs-content-' + betId).innerHTML =
+      '<span style="color: #ff4b4b;">error loading logs</span>';
   }
 }
+
+// ============================================================
+// Render Bet Logs (book aggregates + individual logs)
+// ============================================================
 
 function renderBetLogs(betId, data) {
   const container = document.getElementById('bet-logs-content-' + betId);
   if (!container || !data.books) return;
 
+  const bet = data.bet || {};
   let html = '';
 
   for (const [bookName, bookData] of Object.entries(data.books)) {
+    const isPM = isPmBook(bookName);
+    const bookId = 'book-' + betId + '-' + bookName.replace(/\s+/g, '-');
     const displayName = normalizeBookName(bookName);
-    html += '<div style="margin-bottom: 6px;">';
-    html += '<div style="color: #aaa; font-weight: 600; margin-bottom: 2px;">' + displayName;
-    if (bookData.weighted_odds > 0) {
-      html += ' -- avg: ' + decimalToAmerican(bookData.weighted_odds);
-    }
-    html += ' -- staked: $' + bookData.total_stake.toFixed(2);
+
+    // Calculate american odds
+    const wOdds = bookData.weighted_odds;
+    const oddsAmerican = wOdds >= 2.0
+      ? '+' + ((wOdds - 1) * 100).toFixed(1)
+      : wOdds > 1 ? (-100 / (wOdds - 1)).toFixed(1) : '--';
+
+    // Book aggregate row (Level 2)
+    html += '<div style="margin-bottom: 8px;">';
+    html += '<div onclick="toggleBook(\'' + bookId + '\')" style="cursor: pointer; padding: 6px 8px; background: #1e1e2a; border-left: 3px solid #4a90d9; margin-bottom: 3px; font-size: 12px;">';
+    html += '<span style="font-weight: 600; color: #ddd;">&#9660; ' + displayName + '</span>';
+    html += ' | $' + bookData.total_stake.toFixed(2) + ' bid';
     if (bookData.total_filled > 0) {
-      html += ' -- filled: $' + bookData.total_filled.toFixed(2);
+      html += ' | $' + bookData.total_filled.toFixed(2) + ' filled';
+    }
+    html += ' | ' + oddsAmerican;
+    if (isPM && (bookData.total_shares_filled > 0 || bookData.total_shares_bid > 0)) {
+      html += ' | ' + Math.round(bookData.total_shares_filled) + '/' + Math.round(bookData.total_shares_bid) + ' shares';
     }
     html += '</div>';
 
-    // Individual log rows
-    bookData.bet_logs.forEach(log => {
-      const logOdds = log.odds ? decimalToAmerican(log.odds) : '--';
-      const logStake = log.stake_added ? '$' + log.stake_added.toFixed(2) : '--';
-      const logFilled = log.filled_added ? '$' + log.filled_added.toFixed(2) : '';
-      const logTime = log.timestamp ? formatTimeAgo(log.timestamp) : '';
-      const notes = log.notes || '';
+    // Individual log rows (Level 3) - initially hidden
+    html += '<div id="' + bookId + '" style="display: none; padding-left: 12px;">';
+    html += '<table style="width: 100%; font-size: 11px; background: #0e1117; border-collapse: collapse;">';
+    html += '<thead><tr style="color: #666; border-bottom: 1px solid #333;">';
+    html += '<th style="text-align: left; padding: 3px 6px;">date</th>';
+    html += '<th style="text-align: right; padding: 3px 6px;">bid $</th>';
+    html += '<th style="text-align: right; padding: 3px 6px;">filled $</th>';
+    if (isPM) html += '<th style="text-align: right; padding: 3px 6px;">shares</th>';
+    html += '<th style="text-align: right; padding: 3px 6px;">odds</th>';
+    if (isPM) html += '<th style="text-align: right; padding: 3px 6px;">bid price</th>';
+    html += '<th style="text-align: right; padding: 3px 6px;">actions</th>';
+    html += '</tr></thead><tbody>';
 
-      html += '<div style="display: flex; gap: 8px; padding: 2px 0; color: #ccc;">';
-      html += '<span style="min-width: 55px;">' + logStake + '</span>';
-      if (logFilled) html += '<span style="min-width: 55px; color: #4caf50;">filled ' + logFilled + '</span>';
-      html += '<span style="min-width: 50px;">' + logOdds + '</span>';
-      if (log.bid_price) html += '<span style="min-width: 40px; color: #888;">' + log.bid_price.toFixed(1) + 'c</span>';
-      html += '<span style="color: #666; flex: 1;">' + logTime + '</span>';
-      if (notes) html += '<span style="color: #555; font-style: italic;">' + notes + '</span>';
+    for (const log of bookData.bet_logs) {
+      html += renderLogRow(log, betId, isPM);
+    }
 
-      // Delete button
-      html += '<span style="cursor: pointer; color: #666;" onclick="event.stopPropagation(); deleteLogEntry(' + log.id + ', ' + betId + ')" title="delete log">[x]</span>';
-      html += '</div>';
-    });
-
-    html += '</div>';
+    html += '</tbody></table></div></div>';
   }
 
   container.innerHTML = html || '<span style="color: #666;">no logs</span>';
 }
+
+function renderLogRow(log, betId, isPM) {
+  const logDate = log.timestamp ? new Date(log.timestamp) : null;
+  const dateStr = logDate
+    ? logDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+      logDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+    : '--';
+
+  const logOdds = log.odds >= 2.0
+    ? '+' + ((log.odds - 1) * 100).toFixed(1)
+    : log.odds > 1 ? (-100 / (log.odds - 1)).toFixed(1) : '--';
+
+  const stakeStr = '$' + (log.stake_added || 0).toFixed(2);
+  const filledStr = '$' + (log.filled_added || 0).toFixed(2);
+  const bidPriceStr = log.bid_price ? log.bid_price.toFixed(2) + '%' : '--';
+
+  const sharesBid = log.shares_bid ? Math.round(log.shares_bid) : 0;
+  const sharesFilled = log.shares_filled ? Math.round(log.shares_filled) : 0;
+  const sharesStr = sharesFilled + '/' + sharesBid;
+
+  const isFinalized = log.is_finalized ? true : false;
+  const rowBg = isFinalized ? 'background: #1a1a22;' : '';
+
+  let html = '<tr style="border-bottom: 1px solid #222; ' + rowBg + '">';
+  html += '<td style="padding: 3px 6px; color: #aaa;">' + dateStr;
+  if (isFinalized) html += ' <span style="color: #666; font-size: 9px;">[fin]</span>';
+  html += '</td>';
+  html += '<td style="text-align: right; padding: 3px 6px;">' + stakeStr + '</td>';
+  html += '<td style="text-align: right; padding: 3px 6px; color: ' + ((log.filled_added || 0) > 0 ? '#4caf50' : '#666') + ';">' + filledStr + '</td>';
+  if (isPM) html += '<td style="text-align: right; padding: 3px 6px; color: #888;">' + sharesStr + '</td>';
+  html += '<td style="text-align: right; padding: 3px 6px;">' + logOdds + '</td>';
+  if (isPM) html += '<td style="text-align: right; padding: 3px 6px; color: #888;">' + bidPriceStr + '</td>';
+
+  // Actions column
+  html += '<td style="text-align: right; padding: 3px 6px; white-space: nowrap;">';
+
+  if (isPM) {
+    if (!isFinalized) {
+      html += '<button onclick="event.stopPropagation(); finalizeBetLog(' + log.id + ', ' + betId + ')" style="padding: 1px 4px; font-size: 9px; background: #555; color: #ccc; border: none; border-radius: 2px; cursor: pointer; margin-right: 2px;">fin</button>';
+      // Fill button for partially filled PM logs
+      if (sharesBid > 0 && sharesFilled < sharesBid) {
+        html += '<button onclick="event.stopPropagation(); fillPMBetLog(' + log.id + ', ' + betId + ', ' + sharesBid + ', ' + sharesFilled + ', ' + (log.bid_price || 0) + ')" style="padding: 1px 4px; font-size: 9px; background: #e6a817; color: #000; border: none; border-radius: 2px; cursor: pointer; margin-right: 2px;">fill</button>';
+      }
+    } else {
+      html += '<button onclick="event.stopPropagation(); unfinalizeBetLog(' + log.id + ', ' + betId + ')" style="padding: 1px 4px; font-size: 9px; background: #444; color: #999; border: none; border-radius: 2px; cursor: pointer; margin-right: 2px;">unfin</button>';
+    }
+  }
+
+  // Update filled button (for any log type)
+  if (!isFinalized) {
+    html += '<button onclick="event.stopPropagation(); editBetLogFilled(' + log.id + ', ' + betId + ')" style="padding: 1px 4px; font-size: 9px; background: #4a90d9; color: #fff; border: none; border-radius: 2px; cursor: pointer; margin-right: 2px;">edit</button>';
+  }
+
+  // Delete button
+  html += '<button onclick="event.stopPropagation(); deleteLogEntry(' + log.id + ', ' + betId + ')" style="padding: 1px 4px; font-size: 9px; background: #ff4b4b; color: #fff; border: none; border-radius: 2px; cursor: pointer;">[x]</button>';
+
+  html += '</td></tr>';
+
+  if (log.notes) {
+    html += '<tr style="border: none;"><td colspan="' + (isPM ? 7 : 5) + '" style="padding: 0 6px 3px 6px; color: #555; font-size: 10px; font-style: italic;">' + log.notes + '</td></tr>';
+  }
+
+  return html;
+}
+
+// ============================================================
+// Toggle Book (expand/collapse within a bet)
+// ============================================================
+
+function toggleBook(bookId) {
+  const el = document.getElementById(bookId);
+  if (!el) return;
+  if (el.style.display === 'none') {
+    el.style.display = 'block';
+    expandedBooks.add(bookId);
+  } else {
+    el.style.display = 'none';
+    expandedBooks.delete(bookId);
+  }
+}
+
+// ============================================================
+// Fill Management
+// ============================================================
+
+async function finalizeBetLog(logId, betId) {
+  try {
+    const resp = await fetch('/finalize_bet_log/' + logId, { method: 'POST' });
+    const data = await resp.json();
+    if (!data.success) throw new Error(data.error);
+    loadedLogs.delete(betId);
+    await loadActiveBets();
+  } catch (e) {
+    alert('error finalizing: ' + e.message);
+  }
+}
+
+async function unfinalizeBetLog(logId, betId) {
+  try {
+    const resp = await fetch('/unfinalize_bet_log/' + logId, { method: 'POST' });
+    const data = await resp.json();
+    if (!data.success) throw new Error(data.error);
+    loadedLogs.delete(betId);
+    await loadActiveBets();
+  } catch (e) {
+    alert('error unfinalizing: ' + e.message);
+  }
+}
+
+async function fillPMBetLog(logId, betId, sharesBid, sharesFilled, bidPrice) {
+  const remaining = Math.round(sharesBid - sharesFilled);
+  const input = prompt(
+    'shares filled?\n\nbid: ' + Math.round(sharesBid) + ' @ ' + bidPrice.toFixed(2) + '%\n' +
+    'already filled: ' + Math.round(sharesFilled) + '\nremaining: ' + remaining,
+    remaining
+  );
+  if (input === null) return;
+
+  const newFilled = parseFloat(input);
+  if (isNaN(newFilled) || newFilled <= 0) {
+    alert('enter a valid number');
+    return;
+  }
+
+  const totalFilled = sharesFilled + newFilled;
+  if (totalFilled > sharesBid) {
+    if (!confirm('total filled (' + Math.round(totalFilled) + ') exceeds bid (' + Math.round(sharesBid) + '). continue?')) return;
+  }
+
+  const newFilledDollar = totalFilled * (bidPrice / 100);
+
+  try {
+    const resp = await fetch('/update_bet_log/' + logId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field: 'filled_added', value: newFilledDollar })
+    });
+    const data = await resp.json();
+    if (!data.success) throw new Error(data.error);
+
+    // Also update shares_filled
+    await fetch('/update_bet_log/' + logId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field: 'shares_filled', value: totalFilled })
+    });
+
+    loadedLogs.delete(betId);
+    await loadActiveBets();
+  } catch (e) {
+    alert('error filling: ' + e.message);
+  }
+}
+
+function editBetLogFilled(logId, betId) {
+  const input = prompt('new filled amount ($):');
+  if (input === null) return;
+
+  const value = parseFloat(input);
+  if (isNaN(value) || value < 0) {
+    alert('enter a valid amount');
+    return;
+  }
+
+  updateBetLogField(logId, betId, 'filled_added', value);
+}
+
+async function updateBetLogField(logId, betId, field, value) {
+  try {
+    const resp = await fetch('/update_bet_log/' + logId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field: field, value: value })
+    });
+    const data = await resp.json();
+    if (!data.success) throw new Error(data.error);
+    loadedLogs.delete(betId);
+    await loadActiveBets();
+  } catch (e) {
+    alert('error updating: ' + e.message);
+  }
+}
+
+// ============================================================
+// Delete Log Entry
+// ============================================================
 
 async function deleteLogEntry(logId, betId) {
   if (!confirm('delete this log entry?')) return;
@@ -278,6 +496,10 @@ async function deleteLogEntry(logId, betId) {
     alert('error: ' + e.message);
   }
 }
+
+// ============================================================
+// Tournament Toggle
+// ============================================================
 
 function toggleTournament(header) {
   const content = header.nextElementSibling;

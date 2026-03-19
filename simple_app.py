@@ -717,6 +717,61 @@ def api_find_opposite_position():
 
 
 # ---------------------------------------------------------------------------
+# Fill Management
+# ---------------------------------------------------------------------------
+@app.route('/finalize_bet_log/<int:log_id>', methods=['POST'])
+def finalize_bet_log_route(log_id):
+    """Finalize a bet log entry (lock from editing)."""
+    try:
+        from database import finalize_bet_log
+        finalize_bet_log(log_id)
+        return jsonify({'success': True, 'message': f'Bet log #{log_id} finalized'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/unfinalize_bet_log/<int:log_id>', methods=['POST'])
+def unfinalize_bet_log_route(log_id):
+    """Unfinalize a bet log entry (allow editing again)."""
+    try:
+        from database import unfinalize_bet_log
+        unfinalize_bet_log(log_id)
+        return jsonify({'success': True, 'message': f'Bet log #{log_id} unfinalized'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/update_bet_log/<int:log_id>', methods=['PATCH'])
+def update_bet_log_route(log_id):
+    """Update a field on a bet_log entry."""
+    try:
+        from database import update_bet_log_field
+        data = request.json
+        field = data.get('field')
+        value = data.get('value')
+        bet_id = update_bet_log_field(log_id, field, value)
+        return jsonify({'success': True, 'bet_id': bet_id})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/update_bet_fill', methods=['POST'])
+def update_bet_fill_route():
+    """Update filled amount for a limit order bet."""
+    try:
+        from database import update_bet_fill
+        data = request.json
+        update_bet_fill(
+            data['bet_id'],
+            float(data['filled_amount']),
+            float(data['bid_price']) if data.get('bid_price') else None
+        )
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
 # Debug
 # ---------------------------------------------------------------------------
 @app.route('/admin/db-status')

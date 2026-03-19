@@ -922,6 +922,81 @@ def get_bet_logs(bet_id):
     return bet, books
 
 
+def finalize_bet_log(log_id):
+    """Set is_finalized = 1 for a bet_log entry."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM ncaa_bet_logs WHERE id = %s', (log_id,))
+    if not cursor.fetchone():
+        conn.close()
+        raise ValueError(f"Bet log #{log_id} not found")
+    cursor.execute('UPDATE ncaa_bet_logs SET is_finalized = 1 WHERE id = %s', (log_id,))
+    conn.commit()
+    conn.close()
+    print(f"Finalized bet_log #{log_id}")
+    return {'success': True}
+
+
+def unfinalize_bet_log(log_id):
+    """Set is_finalized = 0 for a bet_log entry."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM ncaa_bet_logs WHERE id = %s', (log_id,))
+    if not cursor.fetchone():
+        conn.close()
+        raise ValueError(f"Bet log #{log_id} not found")
+    cursor.execute('UPDATE ncaa_bet_logs SET is_finalized = 0 WHERE id = %s', (log_id,))
+    conn.commit()
+    conn.close()
+    print(f"Unfinalized bet_log #{log_id}")
+    return True
+
+
+def update_bet_log_field(log_id, field, value):
+    """Update a single field on a bet_log entry, then recalculate parent bet totals."""
+    allowed_fields = ['stake_added', 'filled_added', 'shares_bid', 'shares_filled', 'odds', 'bid_price', 'notes']
+    if field not in allowed_fields:
+        raise ValueError(f"Field '{field}' not allowed")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT bet_id, is_finalized FROM ncaa_bet_logs WHERE id = %s', (log_id,))
+    log = cursor.fetchone()
+    if not log:
+        conn.close()
+        raise ValueError(f"Bet log #{log_id} not found")
+
+    if log['is_finalized']:
+        conn.close()
+        raise ValueError(f"Bet log #{log_id} is finalized and cannot be edited")
+
+    cursor.execute(f'UPDATE ncaa_bet_logs SET {field} = %s WHERE id = %s', (value, log_id))
+    conn.commit()
+
+    bet_id = log['bet_id']
+    _recalculate_bet_totals(cursor, bet_id)
+    conn.commit()
+    conn.close()
+    print(f"Updated bet_log #{log_id} {field} = {value}")
+    return bet_id
+
+
+def update_bet_fill(bet_id, filled_amount, bid_price=None):
+    """Update the filled amount for a limit order bet."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    if bid_price is not None:
+        cursor.execute('UPDATE ncaa_bets SET filled_amount = %s, bid_price = %s WHERE id = %s',
+                       (filled_amount, bid_price, bet_id))
+    else:
+        cursor.execute('UPDATE ncaa_bets SET filled_amount = %s WHERE id = %s',
+                       (filled_amount, bet_id))
+    conn.commit()
+    conn.close()
+    print(f"Updated bet #{bet_id} fill: ${filled_amount}")
+
+
 def delete_bet(bet_id, username):
     """
     Delete a bet and all its associated logs.
