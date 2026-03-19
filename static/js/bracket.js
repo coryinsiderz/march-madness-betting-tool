@@ -118,7 +118,8 @@ function renderBracketRegion(region) {
   html += '<div class="bracket-matchup bracket-winner-slot">';
   if (f4Winner) {
     const prob = getTeamFair(f4Winner, 'f4');
-    html += '<div class="bracket-team bracket-advanced" onclick="openBracketBet(\'' + esc(f4Winner) + '\', \'f4\')">';
+    const f4Ctx = '{&quot;region&quot;:&quot;' + region + '&quot;,&quot;round&quot;:3,&quot;index&quot;:0,&quot;team&quot;:&quot;' + esc(f4Winner).replace(/"/g, '&quot;') + '&quot;,&quot;roundKey&quot;:&quot;f4&quot;,&quot;isAdvanced&quot;:true}';
+    html += '<div class="bracket-team bracket-advanced" onclick="openBracketBet(\'' + esc(f4Winner) + '\', \'f4\')" oncontextmenu="showBracketContextMenu(event, ' + f4Ctx + ')">';
     html += '<span class="bracket-seed">' + f4Seed + '</span> ';
     html += '<span class="bracket-team-name">' + f4Winner + '</span>';
     html += fairOddsHtml(prob);
@@ -163,7 +164,10 @@ function renderTeamSlot(region, round, index, team, seed, roundKey, winner) {
   if (isWinner) cls += ' bracket-advanced';
   if (isLoser) cls += ' bracket-eliminated';
 
-  let html = '<div class="' + cls + '" onclick="advanceTeam(\'' + region + '\', ' + round + ', ' + index + ', \'' + esc(team) + '\')">';
+  // Build context data for right-click
+  const ctxData = '{&quot;region&quot;:&quot;' + region + '&quot;,&quot;round&quot;:' + round + ',&quot;index&quot;:' + index + ',&quot;team&quot;:&quot;' + esc(team).replace(/"/g, '&quot;') + '&quot;,&quot;roundKey&quot;:&quot;' + roundKey + '&quot;,&quot;isAdvanced&quot;:' + isWinner + '}';
+
+  let html = '<div class="' + cls + '" onclick="advanceTeam(\'' + region + '\', ' + round + ', ' + index + ', \'' + esc(team) + '\')" oncontextmenu="showBracketContextMenu(event, ' + ctxData + ')">';
   html += '<span class="bracket-seed">' + seed + '</span> ';
   html += '<span class="bracket-team-name">' + team + '</span>';
   html += fairOddsHtml(prob);
@@ -255,7 +259,8 @@ function renderFinalFour() {
   if (champion) {
     const prob = getTeamFair(champion, 'win_title');
     const seed = getTeamSeed(champion);
-    html += '<div class="bracket-team bracket-advanced" onclick="openBracketBet(\'' + esc(champion) + '\', \'win_title\')">';
+    const champCtx = '{&quot;region&quot;:&quot;final_four&quot;,&quot;round&quot;:1,&quot;index&quot;:0,&quot;team&quot;:&quot;' + esc(champion).replace(/"/g, '&quot;') + '&quot;,&quot;roundKey&quot;:&quot;win_title&quot;,&quot;isAdvanced&quot;:true,&quot;isFF&quot;:true}';
+    html += '<div class="bracket-team bracket-advanced" onclick="openBracketBet(\'' + esc(champion) + '\', \'win_title\')" oncontextmenu="showBracketContextMenu(event, ' + champCtx + ')">';
     html += '<span class="bracket-seed">' + seed + '</span> ';
     html += '<span class="bracket-team-name">' + champion + '</span>';
     html += fairOddsHtml(prob);
@@ -285,7 +290,9 @@ function renderFFSlot(ffRegion, round, matchupIndex, team, sourceRegion, fairRou
   if (isWinner) cls += ' bracket-advanced';
   if (isLoser) cls += ' bracket-eliminated';
 
-  let html = '<div class="' + cls + '" onclick="advanceFF(0, ' + matchupIndex + ', \'' + esc(team) + '\')">';
+  const ctxData = '{&quot;region&quot;:&quot;final_four&quot;,&quot;round&quot;:0,&quot;index&quot;:' + matchupIndex + ',&quot;team&quot;:&quot;' + esc(team).replace(/"/g, '&quot;') + '&quot;,&quot;roundKey&quot;:&quot;' + fairRound + '&quot;,&quot;isAdvanced&quot;:' + isWinner + ',&quot;isFF&quot;:true}';
+
+  let html = '<div class="' + cls + '" onclick="advanceFF(0, ' + matchupIndex + ', \'' + esc(team) + '\')" oncontextmenu="showBracketContextMenu(event, ' + ctxData + ')">';
   html += '<span class="bracket-seed">' + seed + '</span> ';
   html += '<span class="bracket-team-name">' + team + '</span>';
   html += fairOddsHtml(prob);
@@ -312,7 +319,9 @@ function renderFFChampSlot(team, fairRound, winner) {
   if (isWinner) cls += ' bracket-advanced';
   if (isLoser) cls += ' bracket-eliminated';
 
-  let html = '<div class="' + cls + '" onclick="advanceFF(1, 0, \'' + esc(team) + '\')">';
+  const ctxData = '{&quot;region&quot;:&quot;final_four&quot;,&quot;round&quot;:1,&quot;index&quot;:0,&quot;team&quot;:&quot;' + esc(team).replace(/"/g, '&quot;') + '&quot;,&quot;roundKey&quot;:&quot;win_title&quot;,&quot;isAdvanced&quot;:' + isWinner + ',&quot;isFF&quot;:true}';
+
+  let html = '<div class="' + cls + '" onclick="advanceFF(1, 0, \'' + esc(team) + '\')" oncontextmenu="showBracketContextMenu(event, ' + ctxData + ')">';
   html += '<span class="bracket-seed">' + seed + '</span> ';
   html += '<span class="bracket-team-name">' + team + '</span>';
   html += fairOddsHtml(prob);
