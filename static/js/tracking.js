@@ -68,15 +68,23 @@ function renderTracking(bets, summary, plAdjustments) {
 
   let html = '';
 
-  // Summary bar
+  // Summary bar (golf-style: open, exposure, p/l, roi, volume)
   if (summary) {
     const plColor = summary.total_pl >= 0 ? '#4caf50' : '#ff4b4b';
     const plSign = summary.total_pl >= 0 ? '+' : '';
+    const totalStaked = bets.reduce((s, b) => s + (b.actual_stake || 0), 0);
+    const openExposure = bets.filter(b => b.status === 'Open').reduce((s, b) => s + (b.actual_stake || 0), 0);
+    const closedVol = bets.filter(b => b.status === 'Closed').reduce((s, b) => s + (b.actual_stake || 0), 0);
+    const roi = closedVol > 0 ? (summary.total_pl / closedVol * 100) : 0;
+    const roiSign = roi >= 0 ? '+' : '';
+
     html += '<div style="background: #262730; padding: 8px 12px; border-radius: 3px; margin-bottom: 12px; display: flex; gap: 16px; font-size: 12px;">';
     html += '<span>open: ' + summary.open_bets + '</span>';
-    html += '<span>closed: ' + summary.closed_bets + '</span>';
+    html += '<span>exposure: $' + openExposure.toFixed(0) + '</span>';
     html += '<span>w/l: ' + summary.won + '/' + summary.lost + '</span>';
     html += '<span style="color: ' + plColor + ';">p/l: ' + plSign + '$' + summary.total_pl.toFixed(2) + '</span>';
+    html += '<span>roi: ' + roiSign + roi.toFixed(1) + '%</span>';
+    html += '<span>vol: $' + closedVol.toFixed(0) + '</span>';
     html += '</div>';
   }
 
@@ -138,24 +146,35 @@ function renderTournamentSection(tournament, bets) {
     const catBets = categorized[cat];
     if (catBets.length === 0) return;
 
-    // Category subtotals
-    let catStake = 0, catPL = 0;
+    // Category subtotals with W/L and ROI
+    let catStake = 0, catPL = 0, catWins = 0, catLosses = 0, catClosedVol = 0;
     catBets.forEach(b => {
       catStake += b.actual_stake || 0;
-      if (b.status === 'Closed') catPL += b.profit_loss || 0;
+      if (b.status === 'Closed') {
+        catPL += b.profit_loss || 0;
+        catClosedVol += b.actual_stake || 0;
+        if (b.result === 'Won') catWins++;
+        else if (b.result === 'Lost') catLosses++;
+      }
     });
 
     const plColor = catPL >= 0 ? '#4caf50' : '#ff4b4b';
     const plSign = catPL >= 0 ? '+' : '';
+    const catRoi = catClosedVol > 0 ? (catPL / catClosedVol * 100) : 0;
 
     html += '<div style="margin: 8px 0 4px 0; font-size: 11px; color: #888; display: flex; justify-content: space-between;">';
     html += '<span>' + cat + ' (' + catBets.length + ')</span>';
-    html += '<span>staked: $' + catStake.toFixed(0) + ' | p/l: <span style="color:' + plColor + '">' + plSign + '$' + catPL.toFixed(2) + '</span></span>';
-    html += '</div>';
+    html += '<span>staked: $' + catStake.toFixed(0);
+    if (catWins + catLosses > 0) {
+      html += ' | ' + catWins + '-' + catLosses;
+      html += ' | <span style="color:' + plColor + '">' + plSign + '$' + catPL.toFixed(2) + '</span>';
+      html += ' | ' + (catRoi >= 0 ? '+' : '') + catRoi.toFixed(1) + '% roi';
+    }
+    html += '</span></div>';
 
     html += '<table class="tracking-bet-table">';
     html += '<thead><tr>';
-    html += '<th>team</th><th>market</th><th>book</th><th>odds</th><th>stake</th><th>status</th><th>p/l</th>';
+    html += '<th>team</th><th>market</th><th>book</th><th>odds</th><th>stake</th><th>status</th><th>p/l</th><th>notes</th>';
     html += '</tr></thead><tbody>';
 
     catBets.forEach(bet => {
@@ -191,10 +210,17 @@ function renderBetRow(bet) {
   html += '<td>' + stake + '</td>';
   html += '<td style="color:' + statusColor + '">' + status + (bet.result ? ' (' + bet.result + ')' : '') + '</td>';
   html += '<td style="color:' + plColor + '">' + pl + '</td>';
+
+  // Notes column (click-to-edit)
+  const rawNotes = (bet.notes && bet.notes !== 'None') ? bet.notes : '';
+  const notesText = rawNotes.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const notesDisplay = rawNotes ? rawNotes.substring(0, 30) + (rawNotes.length > 30 ? '...' : '') : '';
+  html += '<td onclick="event.stopPropagation(); editBetNotes(' + betId + ', this)" style="color: #666; font-size: 10px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text;" title="' + notesText + '">' + notesDisplay + '</td>';
+
   html += '</tr>';
 
   // Hidden logs row
-  html += '<tr id="bet-logs-' + betId + '" style="display:none"><td colspan="7"><div id="bet-logs-content-' + betId + '" style="padding: 8px; background: #1a1a1a;">loading...</div></td></tr>';
+  html += '<tr id="bet-logs-' + betId + '" style="display:none"><td colspan="8"><div id="bet-logs-content-' + betId + '" style="padding: 8px; background: #1a1a1a;">loading...</div></td></tr>';
 
   return html;
 }
@@ -567,6 +593,45 @@ async function deleteLogEntry(logId, betId) {
   } catch (e) {
     alert('error: ' + e.message);
   }
+}
+
+// ============================================================
+// Inline Notes Editing
+// ============================================================
+
+function editBetNotes(betId, cell) {
+  const currentNotes = cell.title || '';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = currentNotes;
+  input.style.cssText = 'width: 100%; padding: 1px 3px; font-size: 10px; background: #0e1117; border: 1px solid #4a90d9; color: #fafafa; border-radius: 2px; outline: none;';
+
+  const save = async () => {
+    const newNotes = input.value.trim();
+    try {
+      await fetch('/update_bet_field/' + betId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field: 'notes', value: newNotes })
+      });
+      // Update cell display
+      cell.textContent = newNotes.substring(0, 30) + (newNotes.length > 30 ? '...' : '');
+      cell.title = newNotes;
+    } catch (e) {
+      cell.textContent = currentNotes.substring(0, 30) + (currentNotes.length > 30 ? '...' : '');
+    }
+  };
+
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { input.blur(); }
+    if (e.key === 'Escape') { cell.textContent = currentNotes.substring(0, 30) + (currentNotes.length > 30 ? '...' : ''); }
+  });
+
+  cell.textContent = '';
+  cell.appendChild(input);
+  input.focus();
+  input.select();
 }
 
 // ============================================================

@@ -745,6 +745,20 @@ def unfinalize_bet_log_route(log_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/update_bet_field/<int:bet_id>', methods=['PATCH'])
+def update_bet_field_route(bet_id):
+    """Update a field on a bet entry (e.g. notes)."""
+    try:
+        from database import update_bet_field
+        data = request.json
+        field = data.get('field')
+        value = data.get('value')
+        update_bet_field(bet_id, field, value)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/update_bet_log/<int:log_id>', methods=['PATCH'])
 def update_bet_log_route(log_id):
     """Update a field on a bet_log entry."""

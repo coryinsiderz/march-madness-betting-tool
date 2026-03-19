@@ -1030,6 +1030,19 @@ def update_bet_log_field(log_id, field, value):
     return bet_id
 
 
+def update_bet_field(bet_id, field, value):
+    """Update a single field on a bet entry."""
+    allowed = ['notes']
+    if field not in allowed:
+        raise ValueError(f"Field '{field}' not allowed on bets")
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(f'UPDATE ncaa_bets SET {field} = %s WHERE id = %s', (value, bet_id))
+    conn.commit()
+    conn.close()
+    return bet_id
+
+
 def update_bet_fill(bet_id, filled_amount, bid_price=None):
     """Update the filled amount for a limit order bet."""
     conn = get_connection()
