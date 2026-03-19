@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ 'edit' if mode == 'edit' else 'view' }} bracket - {{ target_username }}</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <style>
+        .admin-bar { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; background: #1a1a2e; border-bottom: 1px solid #4a4a4a; margin-bottom: 10px; }
+        .admin-bar-left { display: flex; align-items: center; gap: 12px; }
+        .admin-bar-title { font-size: 13px; color: #fafafa; }
+        .admin-bar-mode { font-size: 11px; padding: 2px 8px; border-radius: 3px; }
+        .admin-bar-mode.view { background: #333; color: #888; }
+        .admin-bar-mode.edit { background: #4a3000; color: #daa520; }
+        .admin-bar a { color: #888; font-size: 11px; text-decoration: none; }
+        .admin-bar a:hover { color: #fafafa; }
+        .read-only-overlay { pointer-events: none; opacity: 0.85; }
+        .bracket-clear { display: none !important; }
+        .edit-mode .bracket-clear { display: inline !important; }
+    </style>
+</head>
+<body class="{{ 'edit-mode' if mode == 'edit' else '' }}">
+    <!-- Admin Bar -->
+    <div class="admin-bar">
+        <div class="admin-bar-left">
+            <span class="admin-bar-title">{{ target_username }}'s bracket</span>
+            <span class="admin-bar-mode {{ mode }}">{{ mode }}</span>
+        </div>
+        <div style="display:flex; gap:12px;">
+            {% if mode == 'view' %}
+            <a href="/admin/bracket/{{ target_username }}/edit">switch to edit</a>
+            {% else %}
+            <a href="/admin/bracket/{{ target_username }}">switch to view</a>
+            {% endif %}
+            <a href="/admin">back to admin</a>
+        </div>
+    </div>
+
+    <!-- Region selector -->
+    <div style="display:flex; gap:6px; margin-bottom:10px; padding:0 16px;">
+        <button class="bracket-region-btn active" data-region="east" onclick="switchBracketRegion('east')">east</button>
+        <button class="bracket-region-btn" data-region="west" onclick="switchBracketRegion('west')">west</button>
+        <button class="bracket-region-btn" data-region="south" onclick="switchBracketRegion('south')">south</button>
+        <button class="bracket-region-btn" data-region="midwest" onclick="switchBracketRegion('midwest')">midwest</button>
+        <button class="bracket-region-btn" data-region="final_four" onclick="switchBracketRegion('final_four')">final four</button>
+    </div>
+
+    <div id="bracket-content" class="{{ '' if mode == 'edit' else 'read-only-overlay' }}" style="overflow-x:auto; padding:0 16px;"></div>
+
+    <!-- Scripts -->
+    <script src="/static/data/fairs.js"></script>
+    <script src="/static/data/bracket.js"></script>
+    <script src="/static/js/constants.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/bracket.js"></script>
+    <script src="/static/js/context-menu.js"></script>
+    <script>
+        // Admin bracket page init
+        const ADMIN_MODE = '{{ mode }}';
+        const ADMIN_TARGET_USER = '{{ target_username }}';
+        const IS_ADMIN_EDIT = (ADMIN_MODE === 'edit');
+
+        // Override saveBracketPicks to persist to server for the target user
+        const _origSave = saveBracketPicks;
+        saveBracketPicks = function() {
+            // Always save to sessionStorage for local rendering
+            sessionStorage.setItem('bracketPicks', JSON.stringify(bracketPicks));
+
+            if (IS_ADMIN_EDIT) {
+                // Admin edit: save to server for target user, bypassing phase locks
+                fetch('/api/bracket/save/' + ADMIN_TARGET_USER, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ picks: bracketPicks })
+                }).catch(err => console.error('admin save error:', err));
+            }
+        };
+
+        // Load picks from server for the target user
+        fetch('/api/bracket/load/' + ADMIN_TARGET_USER)
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.picks) {
+                    bracketPicks = data.picks;
+                    sessionStorage.setItem('bracketPicks', JSON.stringify(bracketPicks));
+                }
+                initBracket();
+            })
+            .catch(() => initBracket());
+
+        // Stub out openBracketBet and showLogBetModal for admin view
+        function showLogBetModal() {}
+        function openBracketBet() {}
+    </script>
+</body>
+</html>

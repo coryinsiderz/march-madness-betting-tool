@@ -5,6 +5,7 @@
 // Final four: picks.final_four[0][0]=semi1 winner, [0][1]=semi2 winner, [1][0]=champion
 let bracketPicks = {};
 let currentBracketRegion = 'east';
+let bracketPhase = { phase1_locked: false, phase2_locked: false, phase3_locked: false, is_admin: false };
 
 const BRACKET_ROUNDS = [
   { key: 'r32', label: 'r64', count: 8 },
@@ -17,12 +18,54 @@ const BRACKET_ROUNDS = [
 // The round key for fair odds lookup when a team advances TO that round
 const ADVANCE_ROUND_KEY = ['r32', 's16', 'e8', 'f4', 'championship'];
 
-function initBracket() {
-  const saved = sessionStorage.getItem('bracketPicks');
-  if (saved) {
-    try { bracketPicks = JSON.parse(saved); } catch(e) { bracketPicks = {}; }
-  }
+// Phase lock mapping: which rounds are locked by which phase
+// Phase 1 locks: R64 picks (round 0) and R32 picks (round 1)
+// Phase 2 locks: S16 picks (round 2) and E8 picks (round 3)
+// Phase 3 locks: F4 winner (round 4) and all final_four picks
+function isRoundLocked(region, round) {
+  if (bracketPhase.is_admin) return false; // admin bypass
+  if (region === 'final_four') return bracketPhase.phase3_locked;
+  if (round <= 1) return bracketPhase.phase1_locked;
+  if (round <= 3) return bracketPhase.phase2_locked;
+  return bracketPhase.phase3_locked;
+}
 
+function initBracket() {
+  // Load from server first, fall back to sessionStorage
+  fetch('/api/bracket/load')
+    .then(r => r.json())
+    .then(data => {
+      if (data.success && data.picks && Object.keys(data.picks).length > 0) {
+        bracketPicks = data.picks;
+      } else {
+        const saved = sessionStorage.getItem('bracketPicks');
+        if (saved) {
+          try { bracketPicks = JSON.parse(saved); } catch(e) { bracketPicks = {}; }
+        }
+      }
+      _finishInitBracket();
+    })
+    .catch(() => {
+      const saved = sessionStorage.getItem('bracketPicks');
+      if (saved) {
+        try { bracketPicks = JSON.parse(saved); } catch(e) { bracketPicks = {}; }
+      }
+      _finishInitBracket();
+    });
+
+  // Load phase info
+  fetch('/api/bracket/phase')
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        bracketPhase = data;
+        updatePhaseDisplay();
+      }
+    })
+    .catch(() => {});
+}
+
+function _finishInitBracket() {
   ['east', 'west', 'south', 'midwest', 'final_four'].forEach(r => {
     if (!bracketPicks[r]) bracketPicks[r] = {};
   });
@@ -35,8 +78,25 @@ function initBracket() {
   updateBracketRegionButtons();
 }
 
+function updatePhaseDisplay() {
+  const el = document.getElementById('bracket-phase-info');
+  if (!el) return;
+  let parts = [];
+  if (bracketPhase.phase1_locked) parts.push('r64/r32 locked');
+  if (bracketPhase.phase2_locked) parts.push('s16/e8 locked');
+  if (bracketPhase.phase3_locked) parts.push('f4/champ locked');
+  if (parts.length === 0) parts.push('all picks open');
+  el.textContent = parts.join(' | ');
+}
+
 function saveBracketPicks() {
   sessionStorage.setItem('bracketPicks', JSON.stringify(bracketPicks));
+  // Persist to server
+  fetch('/api/bracket/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ picks: bracketPicks })
+  }).catch(err => console.error('bracket save error:', err));
 }
 
 function switchBracketRegion(region) {
@@ -335,6 +395,8 @@ function renderFFChampSlot(team, fairRound, winner) {
 }
 
 function advanceFF(round, matchupIndex, team) {
+  if (isRoundLocked('final_four', 0)) return;
+
   if (!bracketPicks.final_four) bracketPicks.final_four = {};
   if (!bracketPicks.final_four[round]) bracketPicks.final_four[round] = {};
 
@@ -355,6 +417,7 @@ function advanceFF(round, matchupIndex, team) {
 }
 
 function clearFFPick(round, matchupIndex) {
+  if (isRoundLocked('final_four', 0)) return;
   if (!bracketPicks.final_four || !bracketPicks.final_four[round]) return;
 
   delete bracketPicks.final_four[round][matchupIndex];
@@ -373,6 +436,8 @@ function clearFFPick(round, matchupIndex) {
 // ============================================================
 
 function advanceTeam(region, round, matchupIndex, team) {
+  if (isRoundLocked(region, round)) return;
+
   if (!bracketPicks[region]) bracketPicks[region] = {};
   if (!bracketPicks[region][round]) bracketPicks[region][round] = {};
 
@@ -386,6 +451,7 @@ function advanceTeam(region, round, matchupIndex, team) {
 }
 
 function clearPick(region, round, matchupIndex) {
+  if (isRoundLocked(region, round)) return;
   if (!bracketPicks[region] || !bracketPicks[region][round]) return;
 
   delete bracketPicks[region][round][matchupIndex];

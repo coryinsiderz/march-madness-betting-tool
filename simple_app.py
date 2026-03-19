@@ -10,7 +10,8 @@ from database import (
     init_db, log_bet, get_active_bets, get_bet_summary, get_pl_adjustments,
     create_event, get_events, delete_event, archive_event,
     grade_bet, ungrade_bet, get_bankroll, get_config, set_config,
-    close_pm_position, find_opposite_position, _recalculate_bet_totals
+    close_pm_position, find_opposite_position, _recalculate_bet_totals,
+    save_bracket_picks, load_bracket_picks, get_all_bracket_picks
 )
 from utils.odds_converter import convert_to_decimal, convert_to_american, decimal_to_american
 
@@ -772,6 +773,136 @@ def update_bet_fill_route():
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Bracket Picks (server-persisted)
+# ---------------------------------------------------------------------------
+
+@app.route('/api/bracket/save', methods=['POST'])
+def save_bracket():
+    """Save bracket picks for the current user."""
+    username = _get_username()
+    if not username:
+        return jsonify({'success': False, 'error': 'not logged in'}), 401
+    try:
+        import json
+        data = request.json
+        picks_json = json.dumps(data.get('picks', {}))
+        save_bracket_picks(username, picks_json)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bracket/load')
+def load_bracket():
+    """Load bracket picks for the current user."""
+    username = _get_username()
+    if not username:
+        return jsonify({'success': False, 'error': 'not logged in'}), 401
+    try:
+        import json
+        picks_json = load_bracket_picks(username)
+        return jsonify({'success': True, 'picks': json.loads(picks_json)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bracket/load/<target_username>')
+def load_bracket_for_user(target_username):
+    """Load bracket picks for a specific user (admin use or read-only view)."""
+    try:
+        import json
+        picks_json = load_bracket_picks(target_username)
+        return jsonify({'success': True, 'picks': json.loads(picks_json), 'username': target_username})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bracket/save/<target_username>', methods=['POST'])
+def save_bracket_for_user(target_username):
+    """Save bracket picks for a specific user (admin only)."""
+    username = _get_username()
+    if username != 'cory':
+        return jsonify({'success': False, 'error': 'admin only'}), 403
+    try:
+        import json
+        data = request.json
+        picks_json = json.dumps(data.get('picks', {}))
+        save_bracket_picks(target_username, picks_json)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bracket/phase')
+def get_bracket_phase():
+    """Return current bracket phase and lock status."""
+    from datetime import datetime, timezone, timedelta
+    now_utc = datetime.now(timezone.utc)
+    eastern = timezone(timedelta(hours=-4))  # EDT
+    now_et = now_utc.astimezone(eastern)
+
+    # Phase 1: R64/R32 picks lock at 12:15 PM ET on March 20, 2026 (first game tips)
+    phase1_lock = datetime(2026, 3, 20, 12, 15, tzinfo=eastern)
+    # Phase 2: S16/E8 picks lock when Sweet 16 starts (March 27, 2026 ~7 PM ET)
+    phase2_lock = datetime(2026, 3, 27, 19, 0, tzinfo=eastern)
+    # Phase 3: F4/Championship/Champion lock when Final Four starts (April 4, 2026 ~6 PM ET)
+    phase3_lock = datetime(2026, 4, 4, 18, 0, tzinfo=eastern)
+
+    username = _get_username()
+    is_admin = (username == 'cory')
+
+    return jsonify({
+        'success': True,
+        'phase1_locked': now_et >= phase1_lock,
+        'phase2_locked': now_et >= phase2_lock,
+        'phase3_locked': now_et >= phase3_lock,
+        'phase1_lock_time': phase1_lock.isoformat(),
+        'phase2_lock_time': phase2_lock.isoformat(),
+        'phase3_lock_time': phase3_lock.isoformat(),
+        'is_admin': is_admin,
+        'now_et': now_et.isoformat()
+    })
+
+
+# ---------------------------------------------------------------------------
+# Admin Panel
+# ---------------------------------------------------------------------------
+
+@app.route('/admin')
+def admin_panel():
+    """Admin panel for viewing/editing all users' brackets."""
+    username = _get_username()
+    if username != 'cory':
+        return 'admin only', 403
+    all_picks = get_all_bracket_picks()
+    return render_template('admin.html', all_picks=all_picks, username=username)
+
+
+@app.route('/admin/bracket/<target_username>')
+def admin_view_bracket(target_username):
+    """View a user's bracket (read-only)."""
+    username = _get_username()
+    if username != 'cory':
+        return 'admin only', 403
+    return render_template('admin_bracket.html',
+                           target_username=target_username,
+                           mode='view',
+                           username=username)
+
+
+@app.route('/admin/bracket/<target_username>/edit')
+def admin_edit_bracket(target_username):
+    """Edit a user's bracket (admin override, bypasses phase locks)."""
+    username = _get_username()
+    if username != 'cory':
+        return 'admin only', 403
+    return render_template('admin_bracket.html',
+                           target_username=target_username,
+                           mode='edit',
+                           username=username)
 
 
 # ---------------------------------------------------------------------------

@@ -297,9 +297,57 @@ def init_db():
         )
     ''')
 
+    # Bracket picks table (one row per user, JSON blob)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS ncaa_bracket_picks (
+            username TEXT PRIMARY KEY,
+            picks_json TEXT NOT NULL DEFAULT '{}',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     conn.commit()
     conn.close()
     print("NCAA database initialized")
+
+
+# ============================================================
+# Bracket Picks
+# ============================================================
+
+def save_bracket_picks(username, picks_json):
+    """Save bracket picks for a user (upsert)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO ncaa_bracket_picks (username, picks_json, updated_at)
+        VALUES (%s, %s, CURRENT_TIMESTAMP)
+        ON CONFLICT (username) DO UPDATE SET picks_json = %s, updated_at = CURRENT_TIMESTAMP
+    ''', (username, picks_json, picks_json))
+    conn.commit()
+    conn.close()
+
+
+def load_bracket_picks(username):
+    """Load bracket picks for a user. Returns JSON string or '{}'."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT picks_json FROM ncaa_bracket_picks WHERE username = %s', (username,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return row['picks_json']
+    return '{}'
+
+
+def get_all_bracket_picks():
+    """Load all users' bracket picks. Returns list of {username, picks_json, updated_at}."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT username, picks_json, updated_at FROM ncaa_bracket_picks ORDER BY username')
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 # ============================================================
