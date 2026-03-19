@@ -1,6 +1,45 @@
-// log-bet.js - log bet modal, close detection
+// log-bet.js - log bet modal, split calculator, kalshi fee adjustment, close detection
 
 let _logBetSubmitting = false;
+
+// ============================================================
+// Kalshi Fee Functions (parabolic fee model)
+// ============================================================
+
+function kalshiFeePerContract(priceInCents, maxFee) {
+  // fee = maxFee * price * (100 - price) / 2500
+  // peaks at 50 cents, 0 at 0 and 100
+  return maxFee * priceInCents * (100 - priceInCents) / 2500;
+}
+
+function kalshiEffectivePrice(rawPricePct, maxFee) {
+  return rawPricePct + kalshiFeePerContract(rawPricePct, maxFee);
+}
+
+function kalshiRawFromEffective(effectivePct, maxFee) {
+  // iterative reverse: effective = raw + fee(raw)
+  let raw = effectivePct;
+  for (let i = 0; i < 10; i++) {
+    const fee = kalshiFeePerContract(raw, maxFee);
+    raw = effectivePct - fee;
+    if (raw <= 0) raw = 0.01;
+    if (raw >= 100) raw = 99.99;
+  }
+  return raw;
+}
+
+function isKalshi(book) {
+  return (book || '').toLowerCase() === 'kalshi';
+}
+
+function isPolymarket(book) {
+  const b = (book || '').toLowerCase();
+  return b === 'poly' || b === 'polymarket';
+}
+
+// ============================================================
+// Modal Show/Hide
+// ============================================================
 
 function showLogBetModal(prefill) {
   const modal = document.getElementById('log-bet-modal');
@@ -22,27 +61,22 @@ function showLogBetModal(prefill) {
   document.getElementById('log-bet-kelly-display').textContent = '';
   document.getElementById('log-bet-edge-display').textContent = '';
   document.getElementById('log-bet-close-info').style.display = 'none';
+  clearSplitFields();
 
-  // Pre-fill fair odds from fairs data if team and market provided
+  // Pre-fill fair odds from fairs data
   if (prefill?.team && prefill?.round) {
     const fairDecimal = getFairDecimalOdds(prefill.team, prefill.round);
     if (fairDecimal) {
-      const fairAmerican = decimalToAmerican(fairDecimal);
-      const fairPct = (1 / fairDecimal * 100).toFixed(2);
-      document.getElementById('log-bet-fair-american').value = fairAmerican;
-      document.getElementById('log-bet-fair-pct').value = fairPct + '%';
+      document.getElementById('log-bet-fair-american').value = decimalToAmerican(fairDecimal);
+      document.getElementById('log-bet-fair-pct').value = (1 / fairDecimal * 100).toFixed(2) + '%';
     }
-    // Map round to market type
     const marketType = ROUND_TO_MARKET_TYPE[prefill.round];
     if (marketType) {
       document.getElementById('log-bet-market').value = marketType;
     }
   }
 
-  // Show/hide PM fields based on book
   updatePmFieldsVisibility();
-
-  // Set up team autocomplete
   setupTeamAutocomplete();
 }
 
@@ -50,22 +84,118 @@ function closeLogBetModal() {
   document.getElementById('log-bet-modal').style.display = 'none';
 }
 
+// ============================================================
+// PM Fields Visibility
+// ============================================================
+
 function updatePmFieldsVisibility() {
   const book = document.getElementById('log-bet-book').value;
-  const pmFields = document.getElementById('log-bet-pm-fields');
+  const splitSection = document.getElementById('log-bet-split-section');
+  const stakeSection = document.getElementById('log-bet-stake-section');
   const sideField = document.getElementById('log-bet-side-container');
 
   if (isPmBook(book)) {
-    pmFields.style.display = 'block';
+    splitSection.style.display = 'block';
+    stakeSection.style.display = 'none';
     sideField.style.display = 'block';
+    updateSplitPrices();
   } else {
-    pmFields.style.display = 'none';
+    splitSection.style.display = 'none';
+    stakeSection.style.display = 'block';
     sideField.style.display = 'none';
   }
 }
 
+// ============================================================
+// Split Calculator
+// ============================================================
+
+function updateSplitPrices() {
+  // Set taker/maker prices from book odds input or raw price
+  const rawInput = document.getElementById('log-bet-raw-price').value;
+  if (rawInput) {
+    updateFromRawPrice();
+  }
+}
+
+function updateFromRawPrice() {
+  const rawPct = parseFloat(document.getElementById('log-bet-raw-price').value);
+  if (isNaN(rawPct) || rawPct <= 0) return;
+
+  const book = document.getElementById('log-bet-book').value;
+  let takerPct, makerPct, feeDisplay = '';
+
+  if (isKalshi(book)) {
+    takerPct = kalshiEffectivePrice(rawPct, KALSHI_TAKER_MAX);
+    makerPct = kalshiEffectivePrice(rawPct, KALSHI_MAKER_MAX);
+    const takerFee = kalshiFeePerContract(rawPct, KALSHI_TAKER_MAX);
+    const makerFee = kalshiFeePerContract(rawPct, KALSHI_MAKER_MAX);
+    feeDisplay = 'taker fee: ' + takerFee.toFixed(2) + ' | maker fee: ' + makerFee.toFixed(2);
+  } else {
+    // polymarket or other PM -- no fees
+    takerPct = rawPct;
+    makerPct = rawPct;
+    feeDisplay = 'no fees';
+  }
+
+  document.getElementById('log-bet-taker-price').value = takerPct.toFixed(2);
+  document.getElementById('log-bet-maker-price').value = makerPct.toFixed(2);
+  document.getElementById('log-bet-fee-display').textContent = feeDisplay;
+
+  calculateSplit();
+}
+
+function calculateSplit() {
+  const takerShares = parseFloat(document.getElementById('log-bet-taker-shares').value) || 0;
+  const takerPrice = parseFloat(document.getElementById('log-bet-taker-price').value) || 0;
+  const makerShares = parseFloat(document.getElementById('log-bet-maker-shares').value) || 0;
+  const makerPrice = parseFloat(document.getElementById('log-bet-maker-price').value) || 0;
+
+  // cost = shares * (price / 100)
+  const takerCost = takerShares * (takerPrice / 100);
+  const makerCost = makerShares * (makerPrice / 100);
+
+  document.getElementById('log-bet-taker-cost').value = '$' + takerCost.toFixed(2);
+  document.getElementById('log-bet-maker-cost').value = '$' + makerCost.toFixed(2);
+
+  const totalShares = takerShares + makerShares;
+  const totalCost = takerCost + makerCost;
+
+  if (totalShares > 0) {
+    const blendedPrice = (totalCost / totalShares) * 100;
+    document.getElementById('log-bet-blended-shares').textContent = totalShares;
+    document.getElementById('log-bet-blended-odds').textContent = blendedPrice.toFixed(2) + '%';
+    document.getElementById('log-bet-blended-cost').textContent = totalCost.toFixed(2);
+
+    // Update hidden fields for submission
+    document.getElementById('log-bet-bid-price').value = blendedPrice.toFixed(2);
+    document.getElementById('log-bet-filled').value = totalCost.toFixed(2);
+
+    // Update book odds display and recalculate kelly
+    document.getElementById('log-bet-book-odds').value = decimalToAmerican(100 / blendedPrice);
+    recalculateKellyDisplay();
+  } else {
+    document.getElementById('log-bet-blended-shares').textContent = '0';
+    document.getElementById('log-bet-blended-odds').textContent = '--';
+    document.getElementById('log-bet-blended-cost').textContent = '0.00';
+  }
+}
+
+function clearSplitFields() {
+  const ids = ['log-bet-raw-price', 'log-bet-taker-shares', 'log-bet-taker-price',
+    'log-bet-taker-cost', 'log-bet-maker-shares', 'log-bet-maker-price', 'log-bet-maker-cost'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('log-bet-blended-shares').textContent = '0';
+  document.getElementById('log-bet-blended-odds').textContent = '--';
+  document.getElementById('log-bet-blended-cost').textContent = '0.00';
+  document.getElementById('log-bet-fee-display').textContent = '';
+}
+
+// ============================================================
+// Team Autocomplete
+// ============================================================
+
 function setupTeamAutocomplete() {
-  const input = document.getElementById('log-bet-team');
   const datalist = document.getElementById('team-list');
   datalist.innerHTML = '';
   getAllTeams().forEach(name => {
@@ -75,19 +205,19 @@ function setupTeamAutocomplete() {
   });
 }
 
-// Update fair odds when team or market changes
+// ============================================================
+// Fair Odds
+// ============================================================
+
 function updateFairFromSelection() {
   const team = document.getElementById('log-bet-team').value;
   const market = document.getElementById('log-bet-market').value;
-
   if (!team) return;
 
-  // Find which round key matches this market
   let roundKey = null;
   for (const [rk, mt] of Object.entries(ROUND_TO_MARKET_TYPE)) {
     if (mt === market) { roundKey = rk; break; }
   }
-
   if (!roundKey) return;
 
   const fairDecimal = getFairDecimalOdds(team, roundKey);
@@ -98,7 +228,6 @@ function updateFairFromSelection() {
   }
 }
 
-// Bidirectional fair odds conversion
 function onFairAmericanChange() {
   const american = document.getElementById('log-bet-fair-american').value;
   const pct = americanToPercentage(american);
@@ -117,7 +246,10 @@ function onFairPctChange() {
   recalculateKellyDisplay();
 }
 
-// Recalculate Kelly suggestion and edge display
+// ============================================================
+// Kelly / Edge Display
+// ============================================================
+
 function recalculateKellyDisplay() {
   const fairPctStr = document.getElementById('log-bet-fair-pct').value.replace('%', '');
   const bookOddsStr = document.getElementById('log-bet-book-odds').value;
@@ -128,11 +260,9 @@ function recalculateKellyDisplay() {
 
   let bookDecimal = null;
   if (isPmBook(book)) {
-    // For PM books, book odds come from bid price
-    const bidPrice = parseFloat(document.getElementById('log-bet-bid-price').value);
-    if (bidPrice > 0) bookDecimal = 100 / bidPrice;
+    // for PM, book odds come from blended price (set by split calc) or book-odds field
+    bookDecimal = americanToDecimal(bookOddsStr);
   } else {
-    // For traditional, parse american odds
     bookDecimal = americanToDecimal(bookOddsStr);
   }
 
@@ -148,7 +278,10 @@ function recalculateKellyDisplay() {
   }
 }
 
-// Check for opposite position (close detection)
+// ============================================================
+// Close Detection
+// ============================================================
+
 async function checkOppositePosition() {
   const team = document.getElementById('log-bet-team').value;
   const market = document.getElementById('log-bet-market').value;
@@ -157,16 +290,12 @@ async function checkOppositePosition() {
 
   if (!team || !market || !side || !book) return;
 
-  // Get tournament from events (use first active event)
   const tournament = document.getElementById('log-bet-tournament')?.value || 'March Madness 2025';
 
   try {
     const params = new URLSearchParams({
-      player_name: team,
-      tournament_name: tournament,
-      market_type: market,
-      side: side,
-      bookie: book
+      player_name: team, tournament_name: tournament,
+      market_type: market, side: side, bookie: book
     });
     const resp = await fetch('/api/find_opposite_position?' + params);
     const data = await resp.json();
@@ -174,7 +303,7 @@ async function checkOppositePosition() {
     const closeInfo = document.getElementById('log-bet-close-info');
     if (data.exists) {
       closeInfo.style.display = 'block';
-      closeInfo.textContent = 'opposite position found: ' + data.shares.toFixed(0) + ' shares @ ' + data.avg_price.toFixed(1) + ' avg';
+      closeInfo.textContent = 'opposite position: ' + data.shares.toFixed(0) + ' shares @ ' + data.avg_price.toFixed(1) + ' avg';
       closeInfo.dataset.betId = data.bet_id;
       closeInfo.dataset.shares = data.shares;
       closeInfo.dataset.avgPrice = data.avg_price;
@@ -186,19 +315,25 @@ async function checkOppositePosition() {
   }
 }
 
-// PM bid price change handlers
+// ============================================================
+// PM Bid Price (legacy compat for non-split flow)
+// ============================================================
+
 function onBidPriceChange() {
   const bidPrice = parseFloat(document.getElementById('log-bet-bid-price').value);
   const stake = parseFloat(document.getElementById('log-bet-stake').value);
-
   if (bidPrice > 0 && stake > 0) {
     const shares = Math.round(stake / (bidPrice / 100));
-    document.getElementById('log-bet-shares-display').textContent = shares + ' shares';
+    const el = document.getElementById('log-bet-shares-display');
+    if (el) el.textContent = shares + ' shares';
   }
   recalculateKellyDisplay();
 }
 
-// Submit bet
+// ============================================================
+// Submit
+// ============================================================
+
 async function submitLogBet() {
   if (_logBetSubmitting) return;
   _logBetSubmitting = true;
@@ -210,10 +345,17 @@ async function submitLogBet() {
     const side = document.getElementById('log-bet-side').value;
     const fairPctStr = document.getElementById('log-bet-fair-pct').value.replace('%', '');
     const bookOddsStr = document.getElementById('log-bet-book-odds').value;
-    const stake = parseFloat(document.getElementById('log-bet-stake').value);
     const notes = document.getElementById('log-bet-notes').value;
 
-    if (!team || !stake || stake <= 0) {
+    // Get stake from either split calc total or stake input
+    let stake;
+    if (isPmBook(book)) {
+      stake = parseFloat(document.getElementById('log-bet-blended-cost')?.textContent) || 0;
+    } else {
+      stake = parseFloat(document.getElementById('log-bet-stake').value) || 0;
+    }
+
+    if (!team || stake <= 0) {
       alert('team and stake required');
       _logBetSubmitting = false;
       return;
@@ -225,15 +367,13 @@ async function submitLogBet() {
     let bookDecimal;
     if (isPmBook(book)) {
       const bidPrice = parseFloat(document.getElementById('log-bet-bid-price').value);
-      bookDecimal = bidPrice > 0 ? 100 / bidPrice : fairDecimal;
+      bookDecimal = bidPrice > 0 ? 100 / bidPrice : americanToDecimal(bookOddsStr) || fairDecimal;
     } else {
       bookDecimal = americanToDecimal(bookOddsStr) || fairDecimal;
     }
 
     const edge = calculateEdge(fairDecimal, bookDecimal);
     const kelly = calculateKellyBet(fairDecimal, bookDecimal);
-
-    // Get tournament name
     const tournament = document.getElementById('log-bet-tournament')?.value || 'March Madness 2025';
 
     const payload = {
@@ -250,7 +390,7 @@ async function submitLogBet() {
       notes: notes || null
     };
 
-    // Add PM fields
+    // Add PM fields from split calculator
     if (isPmBook(book)) {
       const bidPrice = parseFloat(document.getElementById('log-bet-bid-price').value);
       if (bidPrice > 0) {
@@ -286,7 +426,6 @@ async function submitLogBet() {
 
     if (data.success) {
       closeLogBetModal();
-      // Refresh tracking and bankroll
       if (typeof loadActiveBets === 'function') loadActiveBets();
       if (typeof loadBankroll === 'function') loadBankroll();
     } else {
