@@ -352,3 +352,135 @@ th.sort-desc::after {
 .pl-negative {
   color: #ff4b4b;
 }
+
+/* ============================================================
+   Bracket
+   ============================================================ */
+
+.bracket-region-btn {
+  padding: 4px 12px;
+  font-size: 11px;
+  background: #262730;
+  color: #888;
+  border: 1px solid #4a4a4a;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.bracket-region-btn.active {
+  background: #4a90d9;
+  color: #fff;
+  border-color: #4a90d9;
+}
+
+.bracket-grid {
+  display: flex;
+  gap: 4px;
+  min-width: 900px;
+}
+
+.bracket-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 200px;
+  justify-content: space-around;
+}
+
+.bracket-col-label {
+  text-align: center;
+  font-size: 10px;
+  color: #666;
+  padding: 2px 0;
+  text-transform: lowercase;
+}
+
+.bracket-matchup {
+  background: #1a1a22;
+  border: 1px solid #333;
+  border-radius: 3px;
+  padding: 2px;
+  margin: 1px 0;
+}
+
+.bracket-vs {
+  text-align: center;
+  font-size: 9px;
+  color: #444;
+  padding: 0;
+  line-height: 1;
+}
+
+.bracket-team {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  cursor: pointer;
+  border-radius: 2px;
+  font-size: 11px;
+  transition: background 0.1s;
+}
+
+.bracket-team:hover {
+  background: #262730;
+}
+
+.bracket-team.bracket-empty {
+  color: #444;
+  cursor: default;
+  padding: 3px 6px;
+}
+
+.bracket-team.bracket-empty:hover {
+  background: transparent;
+}
+
+.bracket-team.bracket-advanced {
+  background: #1a2a1a;
+  border-left: 2px solid #4caf50;
+}
+
+.bracket-team.bracket-eliminated {
+  opacity: 0.35;
+}
+
+.bracket-seed {
+  color: #888;
+  font-size: 9px;
+  min-width: 14px;
+  text-align: right;
+}
+
+.bracket-team-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #ddd;
+  font-size: 11px;
+}
+
+.bracket-fair {
+  font-size: 9px;
+  color: #666;
+  white-space: nowrap;
+  font-family: 'SF Mono', 'Menlo', monospace;
+}
+
+.bracket-clear {
+  color: #666;
+  font-size: 9px;
+  cursor: pointer;
+  padding: 0 2px;
+  margin-left: 2px;
+}
+
+.bracket-clear:hover {
+  color: #ff4b4b;
+}
+
+.bracket-winner-slot {
+  background: #1a1a2a;
+  border: 1px solid #4a90d9;
+}

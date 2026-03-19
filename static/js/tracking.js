@@ -7,24 +7,21 @@ let expandedBooks = new Set();
 
 // Tab switching
 function showTab(tabName) {
-  const fairsTab = document.getElementById('fairs-tab');
-  const trackingTab = document.getElementById('tracking-tab');
-  const fairsBtn = document.getElementById('fairs-tab-btn');
-  const trackingBtn = document.getElementById('tracking-tab-btn');
+  const tabs = ['fairs', 'bracket', 'tracking'];
+  tabs.forEach(t => {
+    const el = document.getElementById(t + '-tab');
+    const btn = document.getElementById(t + '-tab-btn');
+    if (el) el.style.display = 'none';
+    if (btn) btn.classList.remove('active');
+  });
 
-  fairsTab.style.display = 'none';
-  trackingTab.style.display = 'none';
-  fairsBtn.classList.remove('active');
-  trackingBtn.classList.remove('active');
+  const activeEl = document.getElementById(tabName + '-tab');
+  const activeBtn = document.getElementById(tabName + '-tab-btn');
+  if (activeEl) activeEl.style.display = 'block';
+  if (activeBtn) activeBtn.classList.add('active');
 
-  if (tabName === 'fairs') {
-    fairsTab.style.display = 'block';
-    fairsBtn.classList.add('active');
-  } else if (tabName === 'tracking') {
-    trackingTab.style.display = 'block';
-    trackingBtn.classList.add('active');
-    loadActiveBets();
-  }
+  if (tabName === 'tracking') loadActiveBets();
+  if (tabName === 'bracket' && typeof initBracket === 'function') initBracket();
 
   sessionStorage.setItem('activeTab', tabName);
 }

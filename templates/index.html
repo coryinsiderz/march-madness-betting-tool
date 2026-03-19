@@ -21,6 +21,7 @@
     <!-- Tab Navigation -->
     <div class="tabs">
         <button class="tab-btn active" id="fairs-tab-btn" onclick="showTab('fairs')">fairs</button>
+        <button class="tab-btn" id="bracket-tab-btn" onclick="showTab('bracket')">bracket</button>
         <button class="tab-btn" id="tracking-tab-btn" onclick="showTab('tracking')">tracking</button>
     </div>
 
@@ -56,6 +57,17 @@
             </thead>
             <tbody id="fairs-tbody"></tbody>
         </table>
+    </div>
+
+    <!-- Bracket Tab -->
+    <div id="bracket-tab" style="display:none;">
+        <div style="display:flex; gap:6px; margin-bottom:10px;">
+            <button class="bracket-region-btn active" data-region="east" onclick="switchBracketRegion('east')">east</button>
+            <button class="bracket-region-btn" data-region="west" onclick="switchBracketRegion('west')">west</button>
+            <button class="bracket-region-btn" data-region="south" onclick="switchBracketRegion('south')">south</button>
+            <button class="bracket-region-btn" data-region="midwest" onclick="switchBracketRegion('midwest')">midwest</button>
+        </div>
+        <div id="bracket-content" style="overflow-x:auto;"></div>
     </div>
 
     <!-- Tracking Tab -->
@@ -199,11 +211,13 @@
 
     <!-- Scripts (order matters) -->
     <script src="/static/data/fairs.js"></script>
+    <script src="/static/data/bracket.js"></script>
     <script src="/static/js/constants.js"></script>
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/log-bet.js"></script>
     <script src="/static/js/tracking.js"></script>
     <script src="/static/js/grading.js"></script>
+    <script src="/static/js/bracket.js"></script>
     <script src="/static/js/context-menu.js"></script>
     <script src="/static/js/init.js"></script>
 </body>
