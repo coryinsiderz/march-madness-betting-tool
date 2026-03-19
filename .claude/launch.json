@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ncaa-app",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["simple_app.py"],
+      "port": 5055
+    }
+  ]
+}

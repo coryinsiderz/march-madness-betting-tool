@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ncaa betting tool</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <h1>ncaa march madness</h1>
+        <div class="header-right">
+            <input type="text" class="bankroll-input" id="bankroll-value" value="--">
+            <span class="user-info">{{ username }}</span>
+            <a href="/logout" style="color:#888; text-decoration:none; font-size:12px;">switch</a>
+            <button onclick="showLogBetModal({})" style="padding:4px 10px; font-size:11px;">+ bet</button>
+        </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tabs">
+        <button class="tab-btn active" id="fairs-tab-btn" onclick="showTab('fairs')">fairs</button>
+        <button class="tab-btn" id="tracking-tab-btn" onclick="showTab('tracking')">tracking</button>
+    </div>
+
+    <!-- Fairs Tab -->
+    <div id="fairs-tab" style="display:block;">
+        <!-- Filters -->
+        <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center;">
+            <select onchange="filterFairsRegion(this.value)" style="background:#0e1117; border:1px solid #4a4a4a; color:#fafafa; padding:4px 6px; border-radius:3px; font-size:11px;">
+                <option value="all">all regions</option>
+                <option value="East">east</option>
+                <option value="West">west</option>
+                <option value="South">south</option>
+                <option value="Midwest">midwest</option>
+            </select>
+            <input type="text" placeholder="search team..." oninput="filterFairsSearch(this.value)" style="background:#0e1117; border:1px solid #4a4a4a; color:#fafafa; padding:4px 6px; border-radius:3px; font-size:11px; width:160px;">
+        </div>
+
+        <!-- Fairs Table -->
+        <table id="fairs-table" class="fairs-table">
+            <thead>
+                <tr>
+                    <th data-sort="team" onclick="sortFairs('team')">team</th>
+                    <th data-sort="seed" onclick="sortFairs('seed')">seed</th>
+                    <th>region</th>
+                    <th data-sort="r32" onclick="sortFairs('r32')">r32</th>
+                    <th data-sort="s16" onclick="sortFairs('s16')">s16</th>
+                    <th data-sort="e8" onclick="sortFairs('e8')">e8</th>
+                    <th data-sort="f4" onclick="sortFairs('f4')">f4</th>
+                    <th data-sort="championship" onclick="sortFairs('championship')">champ</th>
+                    <th data-sort="win_title" onclick="sortFairs('win_title')">win title</th>
+                </tr>
+            </thead>
+            <tbody id="fairs-tbody"></tbody>
+        </table>
+    </div>
+
+    <!-- Tracking Tab -->
+    <div id="tracking-tab" style="display:none;">
+        <div id="tracking-content">
+            <div style="color:#888; padding:20px; text-align:center;">loading...</div>
+        </div>
+    </div>
+
+    <!-- Log Bet Modal -->
+    <div id="log-bet-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <h2 style="margin:0; font-size:14px;">log bet</h2>
+                <span style="cursor:pointer; color:#888; font-size:16px;" onclick="closeLogBetModal()">[x]</span>
+            </div>
+
+            <label>tournament</label>
+            <input type="text" id="log-bet-tournament" value="March Madness 2025" list="tournament-list">
+            <datalist id="tournament-list"></datalist>
+
+            <label>team</label>
+            <input type="text" id="log-bet-team" list="team-list" oninput="updateFairFromSelection()" placeholder="e.g. Duke">
+            <datalist id="team-list"></datalist>
+
+            <label>market</label>
+            <select id="log-bet-market" onchange="updateFairFromSelection()">
+                <option value="win_title">win title</option>
+                <option value="reach_championship">reach championship</option>
+                <option value="reach_f4">reach final four</option>
+                <option value="reach_e8">reach elite 8</option>
+                <option value="reach_s16">reach sweet 16</option>
+                <option value="reach_r32">reach round of 32</option>
+                <option value="game_ml">game moneyline</option>
+                <option value="game_spread">game spread</option>
+                <option value="game_total">game total</option>
+                <option value="other">other</option>
+            </select>
+
+            <label>book</label>
+            <select id="log-bet-book" onchange="updatePmFieldsVisibility(); recalculateKellyDisplay(); checkOppositePosition();">
+                <option value="dk">DraftKings</option>
+                <option value="fd">FanDuel</option>
+                <option value="bov">Bovada</option>
+                <option value="bol">BetOnline</option>
+                <option value="bm">Bookmaker</option>
+                <option value="365">bet365</option>
+                <option value="kalshi">Kalshi</option>
+                <option value="poly">Polymarket</option>
+                <option value="cb">Cloudbet</option>
+                <option value="105">Bet105</option>
+            </select>
+
+            <div id="log-bet-side-container" style="display:none;">
+                <label>side</label>
+                <select id="log-bet-side" onchange="checkOppositePosition()">
+                    <option value="YES">yes</option>
+                    <option value="NO">no</option>
+                </select>
+            </div>
+
+            <div style="display:flex; gap:6px;">
+                <div style="flex:1">
+                    <label>fair (american)</label>
+                    <input type="text" id="log-bet-fair-american" oninput="onFairAmericanChange()" placeholder="+500">
+                </div>
+                <div style="flex:1">
+                    <label>fair (%)</label>
+                    <input type="text" id="log-bet-fair-pct" oninput="onFairPctChange()" placeholder="16.7%">
+                </div>
+            </div>
+
+            <label>book odds (american)</label>
+            <input type="text" id="log-bet-book-odds" oninput="recalculateKellyDisplay()" placeholder="+450">
+
+            <div id="log-bet-pm-fields" style="display:none;">
+                <label>bid price (cents)</label>
+                <input type="number" id="log-bet-bid-price" oninput="onBidPriceChange()" placeholder="20" step="0.1">
+                <span id="log-bet-shares-display" style="font-size:11px; color:#888;"></span>
+                <label>filled amount ($)</label>
+                <input type="number" id="log-bet-filled" step="0.01" placeholder="0.00">
+            </div>
+
+            <label>stake ($)</label>
+            <input type="number" id="log-bet-stake" step="0.01" placeholder="0.00">
+
+            <div style="display:flex; gap:12px; margin:6px 0; font-size:11px;">
+                <span id="log-bet-kelly-display" style="color:#4caf50;"></span>
+                <span id="log-bet-edge-display"></span>
+            </div>
+
+            <div id="log-bet-close-info" style="display:none; background:#1a1a1a; padding:6px; border-radius:3px; margin:6px 0; font-size:11px; color:#daa520;"></div>
+
+            <label>notes</label>
+            <input type="text" id="log-bet-notes" placeholder="optional">
+
+            <div class="modal-actions">
+                <button onclick="closeLogBetModal()" style="background:#333; margin-right:6px;">cancel</button>
+                <button onclick="submitLogBet()">log bet</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts (order matters) -->
+    <script src="/static/data/fairs.js"></script>
+    <script src="/static/js/constants.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/log-bet.js"></script>
+    <script src="/static/js/tracking.js"></script>
+    <script src="/static/js/grading.js"></script>
+    <script src="/static/js/context-menu.js"></script>
+    <script src="/static/js/init.js"></script>
+</body>
+</html>

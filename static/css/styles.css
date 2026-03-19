@@ -1,0 +1,350 @@
+/* ncaa betting tool - dark theme */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #0e1117;
+  color: #fafafa;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 15px;
+}
+
+h1 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* controls */
+.controls {
+  background: #262730;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.controls label {
+  color: #aaa;
+  font-size: 12px;
+  margin-right: 6px;
+}
+
+.controls input,
+.controls select {
+  background: #0e1117;
+  border: 1px solid #4a4a4a;
+  color: #fafafa;
+  padding: 5px;
+  border-radius: 3px;
+  font-size: 12px;
+  margin-right: 8px;
+}
+
+/* buttons */
+button {
+  background: #ff4b4b;
+  color: #fafafa;
+  border: none;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #ff3333;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #262730;
+  font-size: 12px;
+}
+
+th,
+td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #4a4a4a;
+  text-align: left;
+}
+
+th {
+  background: #1a1a1a;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+th:hover {
+  background: #252525;
+}
+
+th.sort-asc::after {
+  content: ' \25B2';
+  font-size: 10px;
+}
+
+th.sort-desc::after {
+  content: ' \25BC';
+  font-size: 10px;
+}
+
+.fairs-table tbody tr:hover,
+.tracking-bet-table tbody tr:hover {
+  background: #333;
+  cursor: pointer;
+}
+
+.bet-row {
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* tabs */
+.tabs {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 15px;
+}
+
+.tab-btn {
+  padding: 8px 16px;
+  background: #333;
+  border: none;
+  color: #fafafa;
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 3px;
+}
+
+.tab-btn.active {
+  background: #666;
+}
+
+/* modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  display: none;
+  overflow-y: auto;
+}
+
+.modal-content {
+  background: #262730;
+  margin: 25px auto;
+  padding: 15px;
+  max-width: 600px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.modal-content label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 12px;
+  color: #aaa;
+  font-weight: 500;
+}
+
+.modal-content input,
+.modal-content select {
+  width: 100%;
+  padding: 5px;
+  margin-bottom: 8px;
+  background: #0e1117;
+  border: 1px solid #4a4a4a;
+  color: #fafafa;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.modal-actions {
+  margin-top: 15px;
+  text-align: right;
+}
+
+/* context menu */
+.context-menu {
+  position: fixed;
+  background: #2a2a2a;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 150px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+  display: none;
+}
+
+.context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  color: #fafafa;
+  font-size: 13px;
+}
+
+.context-menu-item:hover {
+  background: #3a3a3a;
+}
+
+.context-menu-separator {
+  height: 1px;
+  background: #4a4a4a;
+  margin: 4px 0;
+}
+
+/* error */
+.error {
+  background: #5d1f1f;
+  color: #ff6b6b;
+  padding: 8px 12px;
+  border-radius: 3px;
+  margin-bottom: 8px;
+}
+
+/* header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.bankroll-display {
+  color: #4caf50;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.user-info {
+  color: #aaa;
+}
+
+/* section header */
+.section-header {
+  background: #1a1a1a;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 3px;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.section-header:hover {
+  background: #252525;
+}
+
+/* bet selected */
+.bet-selected {
+  outline: 2px solid #4a90d9;
+}
+
+/* pm fields - shown when PM book selected */
+.pm-fields {
+  display: none;
+}
+
+/* side toggle - shown when PM book selected */
+.side-toggle {
+  display: none;
+}
+
+/* probability coloring */
+.prob-high {
+  color: #4caf50;
+}
+
+.prob-med {
+  color: #daa520;
+}
+
+.prob-low {
+  color: #fafafa;
+}
+
+/* odds display */
+.odds-display {
+  color: #888;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* fairs table layout */
+.fairs-table td, .fairs-table th { white-space: nowrap; padding: 5px 6px; }
+.fairs-table td:nth-child(2), .fairs-table th:nth-child(2) { text-align: center; }
+.fairs-table td:nth-child(3), .fairs-table th:nth-child(3) { text-align: center; }
+/* right-align round columns (4-9) headers + data */
+.fairs-table th:nth-child(n+4), .fairs-table td:nth-child(n+4) { text-align: right; }
+
+.fairs-table .fair-val {
+  display: inline-flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.fairs-table .fair-pct { text-align: right; font-size: 12px; }
+.fairs-table .fair-odds { text-align: right; color: #666; font-size: 10px; min-width: 40px; }
+
+/* fairs cell */
+.fairs-cell { cursor: pointer; padding: 4px 6px; }
+.fairs-cell:hover { background: #333; }
+
+/* bankroll input */
+.bankroll-input {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #4caf50;
+  font-weight: 600;
+  font-size: 14px;
+  font-family: inherit;
+  width: 120px;
+  text-align: right;
+  padding: 2px 4px;
+  border-radius: 3px;
+  outline: none;
+}
+.bankroll-input:hover { border-color: #4a4a4a; }
+.bankroll-input:focus { border-color: #4caf50; background: #0e1117; }
+
+/* positive/negative P/L */
+.pl-positive {
+  color: #4caf50;
+}
+
+.pl-negative {
+  color: #ff4b4b;
+}
