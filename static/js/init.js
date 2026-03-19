@@ -23,6 +23,10 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadBankroll() {
   try {
     const resp = await fetch('/get_bankroll');
+    if (!resp.ok) {
+      if (resp.status === 401) { window.location.href = '/login'; return; }
+      return;
+    }
     const data = await resp.json();
     if (data.success) {
       const input = document.getElementById('bankroll-value');

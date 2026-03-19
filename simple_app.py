@@ -74,6 +74,9 @@ def require_login():
     if any(request.path.startswith(p) for p in allowed):
         return
     if 'username' not in session:
+        # Return JSON error for API requests, redirect for page requests
+        if request.is_json or request.headers.get('Accept', '').startswith('application/json'):
+            return jsonify({'success': False, 'error': 'not logged in'}), 401
         return redirect(url_for('login'))
 
 

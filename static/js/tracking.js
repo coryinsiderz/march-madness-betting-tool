@@ -33,6 +33,10 @@ function showTab(tabName) {
 async function loadActiveBets() {
   try {
     const resp = await fetch('/get_active_bets');
+    if (!resp.ok) {
+      if (resp.status === 401) { window.location.href = '/login'; return; }
+      return;
+    }
     const data = await resp.json();
 
     if (!data.success) {
