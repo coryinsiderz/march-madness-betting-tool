@@ -2,6 +2,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   loadBankroll();
+  restoreFairsMode();
   renderFairsTable();
 
   // Restore last active tab
@@ -159,4 +160,28 @@ function filterFairsRegion(region) {
 function filterFairsSearch(query) {
   fairsSearchFilter = query;
   renderFairsTable();
+}
+
+function toggleFairsMode() {
+  const table = document.getElementById('fairs-table');
+  const btn = document.getElementById('fairs-mode-btn');
+  if (table.classList.contains('prob-mode')) {
+    table.classList.remove('prob-mode');
+    btn.textContent = 'odds';
+    sessionStorage.setItem('fairsDisplayMode', 'odds');
+  } else {
+    table.classList.add('prob-mode');
+    btn.textContent = 'prob';
+    sessionStorage.setItem('fairsDisplayMode', 'prob');
+  }
+}
+
+function restoreFairsMode() {
+  const mode = sessionStorage.getItem('fairsDisplayMode');
+  if (mode === 'prob') {
+    const table = document.getElementById('fairs-table');
+    const btn = document.getElementById('fairs-mode-btn');
+    if (table) table.classList.add('prob-mode');
+    if (btn) btn.textContent = 'prob';
+  }
 }

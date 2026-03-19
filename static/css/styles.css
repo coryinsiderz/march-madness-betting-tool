@@ -316,8 +316,12 @@ th.sort-desc::after {
   gap: 3px;
   font-variant-numeric: tabular-nums;
 }
-.fairs-table .fair-pct { text-align: right; font-size: 10px; color: #666; }
+/* odds mode (default): american bright, pct muted */
+.fairs-table .fair-pct { text-align: right; font-size: 10px; color: #999; }
 .fairs-table .fair-odds { text-align: right; color: #fafafa; font-size: 12px; min-width: 40px; }
+/* prob mode: pct bright, american muted */
+.fairs-table.prob-mode .fair-pct { color: #fafafa; font-size: 12px; }
+.fairs-table.prob-mode .fair-odds { color: #999; font-size: 10px; }
 
 /* fairs cell */
 .fairs-cell { cursor: pointer; padding: 4px 6px; }
