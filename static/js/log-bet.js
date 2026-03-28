@@ -69,8 +69,12 @@ function showLogBetModal(prefill) {
   if (prefill?.team && prefill?.round) {
     const fairDecimal = getFairDecimalOdds(prefill.team, prefill.round);
     if (fairDecimal) {
-      document.getElementById('log-bet-fair-american').value = decimalToAmerican(fairDecimal);
-      document.getElementById('log-bet-fair-pct').value = (1 / fairDecimal * 100).toFixed(2) + '%';
+      let fairPct = 1 / fairDecimal * 100;
+      const side = document.getElementById('log-bet-side').value;
+      if (side === 'NO') fairPct = 100 - fairPct;
+      const adjustedDecimal = 100 / fairPct;
+      document.getElementById('log-bet-fair-american').value = decimalToAmerican(adjustedDecimal);
+      document.getElementById('log-bet-fair-pct').value = fairPct.toFixed(2) + '%';
     }
     const marketType = ROUND_TO_MARKET_TYPE[prefill.round];
     if (marketType) {
@@ -297,10 +301,20 @@ function updateFairFromSelection() {
 
   const fairDecimal = getFairDecimalOdds(team, roundKey);
   if (fairDecimal) {
-    document.getElementById('log-bet-fair-american').value = decimalToAmerican(fairDecimal);
-    document.getElementById('log-bet-fair-pct').value = (1 / fairDecimal * 100).toFixed(2) + '%';
+    let fairPct = 1 / fairDecimal * 100;
+    const side = document.getElementById('log-bet-side').value;
+    if (side === 'NO') fairPct = 100 - fairPct;
+    const adjustedDecimal = 100 / fairPct;
+    document.getElementById('log-bet-fair-american').value = decimalToAmerican(adjustedDecimal);
+    document.getElementById('log-bet-fair-pct').value = fairPct.toFixed(2) + '%';
     recalculateKellyDisplay();
   }
+}
+
+function updateFairForSide() {
+  // Re-derive fair from the stored YES fair and current side selection
+  updateFairFromSelection();
+  recalculateKellyDisplay();
 }
 
 function onFairAmericanChange() {
