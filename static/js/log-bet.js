@@ -179,6 +179,7 @@ function updatePmFieldsVisibility() {
     splitSection.style.display = 'none';
     stakeSection.style.display = 'block';
     sideField.style.display = 'none';
+    document.getElementById('log-bet-side').value = 'YES';
   }
 }
 

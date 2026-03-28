@@ -198,7 +198,7 @@ function renderBetRow(bet) {
   const statusColor = status === 'Open' ? '#4a90d9' : (bet.result === 'Won' ? '#4caf50' : bet.result === 'Lost' ? '#ff4b4b' : '#888');
   const marketDisplay = NCAA_MARKET_TYPES[bet.market_type] || bet.market_type || '--';
   const booksDisplay = bet.books_list || getBookAbbr(bet.bookie);
-  const sideDisplay = (bet.side && bet.side !== 'None') ? (' ' + bet.side) : '';
+  const sideDisplay = (isPmBook(bet.bookie) && bet.side && bet.side !== 'None') ? (' ' + bet.side) : '';
 
   const safeJson = JSON.stringify(bet).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
 
