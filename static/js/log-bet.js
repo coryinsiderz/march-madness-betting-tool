@@ -178,8 +178,6 @@ function updatePmFieldsVisibility() {
   } else {
     splitSection.style.display = 'none';
     stakeSection.style.display = 'block';
-    sideField.style.display = 'none';
-    document.getElementById('log-bet-side').value = 'YES';
   }
 }
 
@@ -463,7 +461,7 @@ async function submitLogBet() {
       edge_percent: edge,
       predicted_kelly: kelly,
       actual_stake: stake,
-      side: isPmBook(book) ? side : null,
+      side: side,
       notes: notes || null
     };
 
